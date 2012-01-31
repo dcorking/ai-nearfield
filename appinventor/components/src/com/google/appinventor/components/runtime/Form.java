@@ -107,6 +107,7 @@ public class Form extends Activity
   // Application lifecycle related fields
   private final HashMap<Integer, ActivityResultListener> activityResultMap = Maps.newHashMap();
   private final Set<OnStopListener> onStopListeners = Sets.newHashSet();
+  private final Set<OnNewIntentListener> onNewIntentListeners = Sets.newHashSet();
   private final Set<OnResumeListener> onResumeListeners = Sets.newHashSet();
   private final Set<OnPauseListener> onPauseListeners = Sets.newHashSet();
   private final Set<OnDestroyListener> onDestroyListeners = Sets.newHashSet();
@@ -289,10 +290,23 @@ public class Form extends Activity
       onStopListener.onStop();
     }
   }
+  
+  @Override
+  protected void onNewIntent(Intent intent) {
+	    super.onNewIntent(intent);
+	    Log.d(LOG_TAG, "Form " + formName + " got onNewIntent");
+	    for (OnNewIntentListener onNewIntentListener : onNewIntentListeners) {
+	      onNewIntentListener.onNewIntent(intent);
+	    }
+	  }
 
   public void registerForOnStop(OnStopListener component) {
     onStopListeners.add(component);
   }
+  
+  public void registerForOnNewIntent(OnNewIntentListener component) {
+	    onNewIntentListeners.add(component);
+	  }
 
   @Override
   protected void onDestroy() {
@@ -914,6 +928,12 @@ public class Form extends Activity
         onStopListeners.remove(onStopListener);
       }
     }
+    if (component instanceof OnNewIntentListener) {
+       OnNewIntentListener onNewIntentListener = (OnNewIntentListener) component;
+       if (onNewIntentListeners.contains(onNewIntentListener)) {
+         onNewIntentListeners.remove(onNewIntentListener);
+       }
+     }
     if (component instanceof OnResumeListener) {
       OnResumeListener onResumeListener = (OnResumeListener) component;
       if (onResumeListeners.contains(onResumeListener)) {

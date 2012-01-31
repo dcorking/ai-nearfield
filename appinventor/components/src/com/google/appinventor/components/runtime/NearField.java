@@ -45,7 +45,7 @@ import com.google.appinventor.components.common.YaVersion;
 @SimpleObject
 @UsesPermissions(permissionNames = "android.permission.NFC")
 public class NearField extends AndroidNonvisibleComponent
-    implements Component, OnStopListener, OnResumeListener, Deleteable {
+    implements Component, OnStopListener, OnResumeListener, OnNewIntentListener, OnPauseListener, Deleteable {
   private static final String TAG = "nearfield";
   private boolean mResumed = false;
   private boolean mWriteMode = false;
@@ -58,7 +58,7 @@ public class NearField extends AndroidNonvisibleComponent
 	PendingIntent mNfcPendingIntent;
 	IntentFilter[] mWriteTagFilters;
 	IntentFilter[] mNdefExchangeFilters;
-
+  
 	/**
 	 * Creates a new NearField component
 	 * @param container  ignored (because this is a non-visible component)
@@ -72,6 +72,8 @@ public class NearField extends AndroidNonvisibleComponent
 	  mNfcAdapter = NfcAdapter.getDefaultAdapter(context);
 		form.registerForOnResume(this);
 		form.registerForOnStop(this);
+		form.registerForOnNewIntent(this);
+		form.registerForOnPause(this);
 
 		// Handle all of our received NFC intents in this activity.
 		mNfcPendingIntent = PendingIntent.getActivity(context, 0,
@@ -161,7 +163,7 @@ public class NearField extends AndroidNonvisibleComponent
 
 	// Method invoked when nfc communication initiated
 	
-	protected void onNewIntent(Intent intent) {
+	public void onNewIntent(Intent intent) {
 		Log.d(TAG, "New NFC Communication initiated.");
 		// NDEF exchange mode
 		if (!mWriteMode && NfcAdapter.ACTION_NDEF_DISCOVERED.equals(intent.getAction())) {
