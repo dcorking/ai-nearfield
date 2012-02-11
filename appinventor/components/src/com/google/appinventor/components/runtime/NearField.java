@@ -3,18 +3,12 @@
 package com.google.appinventor.components.runtime;
 
 import android.app.Activity;
-import android.app.PendingIntent;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.IntentFilter.MalformedMimeTypeException;
 import android.nfc.NdefMessage;
 import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.os.Parcelable;
 import android.util.Log;
-import android.widget.TextView;
-import android.widget.Toast;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.PropertyCategory;
@@ -24,7 +18,6 @@ import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.annotations.UsesPermissions;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.common.YaVersion;
-
 
 /**
  * Controller for Near Field Communication
@@ -45,20 +38,16 @@ import com.google.appinventor.components.common.YaVersion;
 @SimpleObject
 @UsesPermissions(permissionNames = "android.permission.NFC")
 public class NearField extends AndroidNonvisibleComponent
-    implements Component, OnStopListener, OnResumeListener, OnNewIntentListener, OnPauseListener, Deleteable {
+    implements OnStopListener, OnResumeListener, OnPauseListener, OnNewIntentListener, Deleteable {
   private static final String TAG = "nearfield";
-  private boolean mResumed = false;
-  private boolean mWriteMode = false;
-  NfcAdapter mNfcAdapter;
-  TextView tv;
-  Context context;
-  Activity activity;
-  private String tagContent = "";
+  private Activity activity;
 
-	PendingIntent mNfcPendingIntent;
-	IntentFilter[] mWriteTagFilters;
-	IntentFilter[] mNdefExchangeFilters;
+  private String tagContent = "";
   
+  /* Used to identify the call to startActivityForResult. Will be passed back into the
+  resultReturned() callback method. */
+  protected int requestCode;
+
 	/**
 	 * Creates a new NearField component
 	 * @param container  ignored (because this is a non-visible component)
@@ -66,38 +55,27 @@ public class NearField extends AndroidNonvisibleComponent
 	public NearField(ComponentContainer container) {
 		super(container.$form());
 		activity = container.$context();
-		// defining context is useless here, but should make it easier to 
-		// compare the code with other components
-		context = activity;
-	  mNfcAdapter = NfcAdapter.getDefaultAdapter(context);
+		// register with the forms to that OnResume and OnNewIntent
+		// messages get sent to this component
 		form.registerForOnResume(this);
-		form.registerForOnStop(this);
 		form.registerForOnNewIntent(this);
-		form.registerForOnPause(this);
-
-		// Handle all of our received NFC intents in this activity.
-		mNfcPendingIntent = PendingIntent.getActivity(context, 0,
-				new Intent(activity, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
-
-		// Intent filters for reading a note from a tag or exchanging over p2p.
-		IntentFilter ndefDetected = new IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED);
-		try {
-			ndefDetected.addDataType("text/plain"); //"text/plain" is a mime type, has to do with input
-		} catch (MalformedMimeTypeException e) { }
-		mNdefExchangeFilters = new IntentFilter[] { ndefDetected };
 		Log.d(TAG, "Nearfield component created");
 	}
+	
 
 	// Events
 
 	/**
 	 * Indicates that a new tag has been detected.
+	 * Currently this is only a plain text tag, as specified in the
+	 * manifest.  See Compiler.java.
 	 */
 	@SimpleEvent
-	public void nearFieldDetected(String message) {
-		EventDispatcher.dispatchEvent(this, "NearFieldDetected", message);
+	public void TagRead(String message) {
+	  Log.d(TAG, "Tag read: got message " + message);
+	  tagContent = message;
+		EventDispatcher.dispatchEvent(this, "TagRead", message);
 	}
-
 
 	// Properties
 
@@ -111,7 +89,7 @@ public class NearField extends AndroidNonvisibleComponent
 	}
 
 
-	// here are examples of methods.  What should the NFC methods be?
+	// Here's an example of a method.  What should the NFC methods be, if any?
 	// When you define these functions the blocks will be created automatically.
 
 	/**
@@ -120,124 +98,79 @@ public class NearField extends AndroidNonvisibleComponent
 	//@SimpleFunction(description = "Derives latitude of given address")
 	//public double LatitudeFromAddress(String locationName) {
 
-	// enable nfc communication in resume
 	
-	public void onResume() {
-		Log.d(TAG, "OnResume method started.");
-		mResumed = true;
-		// Sticky notes received from Android. 
-		/* This is needed if tag is to be read even if the application is in background-
-           i.e. even if there isn't an open application that can be used with this message,
-           the phone still receives and stores all of the data, even if it is not 
-           clear yet how the data will be used.
-		 */
-		Intent foo1 = activity.getIntent();	
-		Log.d(TAG, "activity intent is " + foo1);
-		if (foo1 == null) {
-		  Log.d(TAG, "????  activity intent is null  ???");
-		}
-		String foo2 = foo1.getAction();
-		Log.d(TAG, "action is " + foo2);
-	  if (foo2 == null) {
-      Log.d(TAG, "????  action is null  ???");
-    }
-		if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(activity.getIntent().getAction())) {
-		  Log.d(TAG, "Getting NDef Messages");
-			NdefMessage[] messages = getNdefMessages(activity.getIntent());
-			byte[] payload = messages[0].getRecords()[0].getPayload(); //extracts content
-			Log.d(TAG, "Got payload: " + payload.toString());
-			//toast(payload.toString());
-			activity.setIntent(new Intent()); // Consume this intent.
-		}
-		enableNdefExchangeMode();//do not forget this- lets NFC communication resume
-		Log.d(TAG, "ending onResume method");
-	}
-
-	// disable nfc communication in pause
 	
-	public void onPause() {
-		Log.d(TAG, "OnPause method started.");
-		mResumed = false;
-		mNfcAdapter.disableForegroundNdefPush(activity); //disables NFC communication 
-	}
-
-	// Method invoked when nfc communication initiated
-	
+	// When NFC is detected, the form's onNewIntent method is triggered (because of the
+	// specification in the manifest.  The form then sends that intent here.
+	@Override
 	public void onNewIntent(Intent intent) {
-		Log.d(TAG, "New NFC Communication initiated.");
-		// NDEF exchange mode
-		if (!mWriteMode && NfcAdapter.ACTION_NDEF_DISCOVERED.equals(intent.getAction())) {
-			String msgs = new String(getNdefMessages(intent)[0].getRecords()[0].getPayload());
-		//	toast(msgs);
-			Log.d(TAG, "OnNewIntent got messages: " + msgs);
-		}
+	  Log.d(TAG, "Nearfield on onNewIntent.  Intent is: " + intent);
+    resolveIntent(intent);
+  }
+
+	// TODO: Re-enable NFC communication if it had been disabled
+	@Override
+	public void onResume() {
+	  Intent intent = activity.getIntent();
+	  Log.d(TAG, "Nearfield on onResume.  Intent is: " + intent);
+    resolveIntent(intent);
+  }
+	
+	void resolveIntent(Intent intent) {
+	  Log.d(TAG, "resolve intent. Intent is: " + intent);
+	  // Parse the intent
+	  String action = intent.getAction();
+	  activity.setIntent(new Intent()); // Consume this intent.  Is this the right thing?
+	  if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
+	    // When a tag is discovered we send it to the service to be save. We
+	    // include a PendingIntent for the service to call back onto. This
+	    // will cause this activity to be restarted with onNewIntent(). At
+	    // that time we read it from the database and view it.
+	    // We'll keep this database code in here for now, but it's useless, because we
+	    // can use AppInventor higher level operations to manipulate the tag data.
+	    Parcelable[] rawMsgs = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES);
+	    NdefMessage[] msgs;
+	    if (rawMsgs != null) {
+	      msgs = new NdefMessage[rawMsgs.length];
+	      for (int i = 0; i < rawMsgs.length; i++) {
+	        msgs[i] = (NdefMessage) rawMsgs[i];
+	      }
+	    } else {
+	      // Unknown tag type
+	      // For now, just ignore it. Later we might want to signal an error to the
+	      // app user.
+	      byte[] empty = new byte[] {};
+	      NdefRecord record = new NdefRecord(NdefRecord.TNF_UNKNOWN, empty, empty, empty);
+	      NdefMessage msg = new NdefMessage(new NdefRecord[] {record});
+	      msgs = new NdefMessage[] {msg};
+	    }
+	    byte[] payload = msgs[0].getRecords()[0].getPayload();
+	    String message = new String(payload);
+	    Log.d(TAG, "Calling TagRead. Message received is " + message);
+	    TagRead(message);
+	  } else {
+	    Log.e(TAG, "Unknown intent " + intent);
+	  }
 	}
 
-	//gets messages from the received intent
-	NdefMessage[] getNdefMessages(Intent intent) { 
-		// Parse the intent- extracts messages from intent received during onResume()
-		NdefMessage[] msgs = null;
-		String action = intent.getAction();
-		if (NfcAdapter.ACTION_TAG_DISCOVERED.equals(action)
-				|| NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
-			Log.d(TAG, "NDEF Signal received.");
-			//following line actually receives NDef signal and turns it into a list
-			Parcelable[] rawMsgs = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES);
-			if (rawMsgs != null) {
-				Log.d(TAG, "Message received is not empty.");
-				msgs = new NdefMessage[rawMsgs.length];
-				for (int i = 0; i < rawMsgs.length; i++) {
-					msgs[i] = (NdefMessage) rawMsgs[i];
-				}
-			} else {
-				Log.d(TAG, "Message received empty or Unknown Tag Type.");
-				// Unknown tag type
-				byte[] empty = new byte[] {};
-				//records are turned into messages which can then be processed/ddisplayed
-				NdefRecord record = new NdefRecord(NdefRecord.TNF_UNKNOWN, empty, empty, empty);
-				NdefMessage msg = new NdefMessage(new NdefRecord[] {
-						record
-				});
-				msgs = new NdefMessage[] {
-						msg
-				};
-			}
-		} else {
-			Log.d(TAG, "Unknown intent.");
-			activity.finish();
-		}
-		nearFieldDetected(new String(msgs[0].getRecords()[0].getPayload()));
-		tagContent = (new String(msgs[0].getRecords()[0].getPayload()));
-		return msgs; //returns actual message that was stored in the tag
-	}
 
-	//turns NFC communication back on
-	private void enableNdefExchangeMode() {
-    Log.d(TAG, "entering enableNdefExchangeMode.");
-		Log.d(TAG,"activity= " + activity.toString() + " PendingIntent= " + mNfcPendingIntent.toString() 
-		    + " ExchangeFilters= " + mNdefExchangeFilters.toString());
-		if (mNfcAdapter == null) {
-		  Log.d(TAG, "mNFCAdapter is nul!!!");
-		}
-		mNfcAdapter.enableForegroundDispatch(activity, mNfcPendingIntent, mNdefExchangeFilters, null);
-    Log.d(TAG, "exiting enableNdefExchangeMode.");
-	}
+	// TODO: Disable NFC communication in onPause and onDelete
+	// and restore it in onResume
 
-	//makes pop up screen on phone
-	private void toast(String text) {
-		Toast.makeText(context, text, Toast.LENGTH_SHORT).show();
+	public void onPause() {
+	  Log.d(TAG, "OnPause method started.");
 	}
 
 	@Override
 	public void onDelete() {
 		// TODO Auto-generated method stub
+	  // need to delete the nearfieldActivity
 		
 	}
 
 	@Override
 	public void onStop() {
-		// TODO Auto-generated method stub
-		
+		// TODO Auto-generated method stub		
 	}
 
 }

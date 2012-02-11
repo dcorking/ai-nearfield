@@ -23,8 +23,11 @@ import com.google.appinventor.components.runtime.util.ViewUtil;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
@@ -111,6 +114,7 @@ public class Form extends Activity
   private final Set<OnResumeListener> onResumeListeners = Sets.newHashSet();
   private final Set<OnPauseListener> onPauseListeners = Sets.newHashSet();
   private final Set<OnDestroyListener> onDestroyListeners = Sets.newHashSet();
+  private final Set<OnReceiveListener> onReceiveListeners = Sets.newHashSet();
 
   // Set to the optional String-valued Extra passed in via an Intent on startup.
   private String startupValue = "";
@@ -123,7 +127,7 @@ public class Form extends Activity
   // the name of the secondary screen. It is saved so that it can be passed to the OtherScreenClosed
   // event.
   private String nextFormName;
-
+  
   @Override
   public void onCreate(Bundle icicle) {
     // Called when the activity is first created
@@ -147,6 +151,12 @@ public class Form extends Activity
     if (startIntent != null && startIntent.hasExtra(ARGUMENT_NAME)) {
       startupValue = startIntent.getStringExtra(ARGUMENT_NAME);
     }
+    
+    // // kludge: This is special to NearField and needs to be fixed
+    // IntentFilter filter = new IntentFilter();
+    // filter.addAction(NearField.TELL_NEARFIELD_COMPONENT);
+    // registerReceiver(myreceiver, filter);
+
 
     // Add application components to the form
     $define();
@@ -247,10 +257,18 @@ public class Form extends Activity
     return nextRequestCode++;
   }
 
+  public void registerForOnReceive(OnReceiveListener component) {
+    onReceiveListeners.add(component);
+  }
+ 
+  
   @Override
   protected void onResume() {
     super.onResume();
     Log.d(LOG_TAG, "Form " + formName + " got onResume");
+    Log.d(LOG_TAG, "intent is "  + getIntent());
+    Log.d(LOG_TAG, "action is " + getIntent().getAction());
+    
     activeForm = this;
 
     // If applicationIsBeingClosed is true, call closeApplication() immediately to continue
@@ -261,6 +279,7 @@ public class Form extends Activity
     }
 
     for (OnResumeListener onResumeListener : onResumeListeners) {
+     // Log.d(LOG_TAG, "invoking listener onResume: " + onResumeListener.toString());
       onResumeListener.onResume();
     }
   }
@@ -294,7 +313,7 @@ public class Form extends Activity
   @Override
   protected void onNewIntent(Intent intent) {
 	    super.onNewIntent(intent);
-	    Log.d(LOG_TAG, "Form " + formName + " got onNewIntent");
+	    Log.d(LOG_TAG, "Form " + formName + " got onNewIntent " + intent);
 	    for (OnNewIntentListener onNewIntentListener : onNewIntentListeners) {
 	      onNewIntentListener.onNewIntent(intent);
 	    }
