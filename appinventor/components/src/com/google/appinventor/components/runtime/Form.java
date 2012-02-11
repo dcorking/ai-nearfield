@@ -114,7 +114,6 @@ public class Form extends Activity
   private final Set<OnResumeListener> onResumeListeners = Sets.newHashSet();
   private final Set<OnPauseListener> onPauseListeners = Sets.newHashSet();
   private final Set<OnDestroyListener> onDestroyListeners = Sets.newHashSet();
-  private final Set<OnReceiveListener> onReceiveListeners = Sets.newHashSet();
 
   // Set to the optional String-valued Extra passed in via an Intent on startup.
   private String startupValue = "";
@@ -257,10 +256,6 @@ public class Form extends Activity
     return nextRequestCode++;
   }
 
-  public void registerForOnReceive(OnReceiveListener component) {
-    onReceiveListeners.add(component);
-  }
- 
   
   @Override
   protected void onResume() {
