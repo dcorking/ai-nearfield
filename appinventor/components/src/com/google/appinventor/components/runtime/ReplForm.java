@@ -26,9 +26,11 @@ public class ReplForm extends Form {
     PackageManager packageManager = this.$context().getPackageManager();
     // the following is intended to prevent the application from being restarted
     // once it has ever run (so it can be run only once after it is installed)
-    packageManager.setComponentEnabledSetting(
-        new ComponentName(this.getPackageName(), this.getClass().getName()),
-        PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+    // packageManager.setComponentEnabledSetting(
+    //     new ComponentName(this.getPackageName(), this.getClass().getName()),
+    //     PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+    // The above two lines are commented out as a stopgap to get Nearfield work
+    // in the REPL.  We need to figure out what we really want to do.
     formReplCommController = new ReplCommController(this);
   }
 
